@@ -1,0 +1,30 @@
+# Environment variables and secrets
+.env
+proxy.php
+ipintel_ratelimit_db.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary files
+test.php
+ping.php
+hello.php
+ipintel.php
