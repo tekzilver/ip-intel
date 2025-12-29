@@ -42,6 +42,7 @@ function processData(data) {
 
     // --- 1. IP Address ---
     document.getElementById('out-ip').innerText = ipinfo.ip || 'N/A';
+	document.getElementById('out-asn').innerText = ipinfo.asn || 'N/A';
 
     // --- 2. ISP / Company ---
     // Tries IPInfo AS_Name -> IPInfo Org -> AbuseIPDB ISP
