@@ -1,0 +1,90 @@
+<?php
+// proxy.php
+// RENAME THIS TO proxy.php AND ADD YOUR API KEYS TO USE IT.
+
+// --- CONFIGURATION ---
+ $MAX_REQUESTS = 50;
+ $RATE_DB = 'ipintel_ratelimit_db.json';
+
+// --- SECURE KEYS ---
+ $keys = [
+    'ipinfo'     => 'YOUR_IPINFO_TOKEN_HERE',
+    'abuseipdb'  => 'YOUR_ABUSEIPDB_TOKEN_HERE',
+    'securitytrails' => 'YOUR_SECURITYTRAILS_TOKEN_HERE'
+];
+
+header('Access-Control-Allow-Origin: *');
+header('Content-Type: application/json');
+
+// --- 1. RATE LIMITING ---
+ $ip = $_SERVER['REMOTE_ADDR'];
+ $date = date('Y-m-d');
+
+if (file_exists($RATE_DB)) {
+    $rate = json_decode(file_get_contents($RATE_DB), true);
+} else {
+    file_put_contents($RATE_DB, json_encode([]));
+    $rate = [];
+}
+
+if (isset($rate[$ip])) {
+    if ($rate[$ip]['date'] === $date) {
+        if ($rate[$ip]['count'] >= $MAX_REQUESTS) {
+            echo json_encode(['error' => 'Limit Reached']);
+            exit;
+        }
+        $rate[$ip]['count']++;
+    } else {
+        $rate[$ip] = ['date' => $date, 'count' => 1];
+    }
+} else {
+    $rate[$ip] = ['date' => $date, 'count' => 1];
+}
+file_put_contents($RATE_DB, json_encode($rate), LOCK_EX);
+
+// --- 2. FETCH DATA ---
+if (!isset($_GET['target'])) exit;
+
+ $target = urlencode($_GET['target']);
+ $targetIP = filter_var($_GET['target'], FILTER_VALIDATE_IP) ? $_GET['target'] : gethostbyname($_GET['target']);
+ $isDomain = ($targetIP !== $_GET['target']);
+
+function fetchData($url, $headers = []) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    if (!empty($headers)) curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    $response = curl_exec($ch);
+    curl_close($ch);
+    return json_decode($response, true);
+}
+
+// A. IPInfo
+ $ipinfoData = fetchData("https://api.ipinfo.io/lite/$targetIP?token=" . $keys['ipinfo']);
+
+// B. AbuseIPDB
+ $abuseData = fetchData(
+    "https://api.abuseipdb.com/api/v2/check?ipAddress=" . urlencode($targetIP) . "&maxAgeInDays=90&verbose=",
+    ["Key: " . $keys['abuseipdb'], "Accept: application/json"]
+);
+
+// C. SecurityTrails
+ $stUrl = $isDomain ? "https://api.securitytrails.com/v1/domain/$target" : "https://api.securitytrails.com/v1/ips/nearby/$targetIP";
+ $stData = fetchData(
+    $stUrl,
+    ["apikey: " . $keys['securitytrails'], "Accept: application/json"]
+);
+
+// --- 3. RETURN ---
+// Calculate remaining quota
+ $remaining = $MAX_REQUESTS - $rate[$ip]['count'];
+
+echo json_encode([
+    'ipinfo' => $ipinfoData,
+    'abuse' => $abuseData,
+    'st' => $stData,
+    'quota_remaining' => $remaining
+]);
+?>
